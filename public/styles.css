@@ -114,6 +114,36 @@ button.small { padding: 5px 10px; font-size: 12px; }
 .comp-block.unknown::before { content: "\25CF"; color: var(--bad); font-size: 8px; }
 .refusal-block { font-size: 12px; color: var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 10px; }
 .subst-block { font-size: 12px; color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 10px; margin-top: 6px; }
+
+/* ---- component previews (approximate, not a real composed layout — see layout_description caption) ---- */
+.dsp-wrap { display: flex; }
+.dsp-btn {
+  font-family: var(--sans); font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 7px;
+  border: 1px solid transparent; cursor: default; opacity: 1;
+}
+.dsp-btn-primary { background: var(--accent); color: #0b0d12; }
+.dsp-btn-secondary { background: transparent; border-color: var(--border); color: var(--text); }
+.dsp-btn-tertiary { background: transparent; color: var(--accent); padding-left: 4px; padding-right: 4px; }
+.dsp-btn-destructive { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.dsp-input { width: 100%; }
+.dsp-input-label { font-size: 10.5px; color: var(--text-faint); margin-bottom: 3px; }
+.dsp-input-field { border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 12.5px; color: var(--text-faint); background: var(--panel-3); }
+.dsp-input-error .dsp-input-field { border-color: var(--bad); color: var(--bad); }
+.dsp-card { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12.5px; font-weight: 600; background: var(--panel-3); }
+.dsp-card-raised { box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+.dsp-sub { display: block; font-size: 10.5px; font-weight: 400; color: var(--text-faint); margin-top: 3px; }
+.dsp-table { width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.dsp-table-row { padding: 6px 10px; font-size: 11.5px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+.dsp-table-row:last-child { border-bottom: none; }
+.dsp-modal { width: 100%; border: 2px solid var(--accent); border-radius: 8px; padding: 14px; font-size: 12.5px; font-weight: 600; background: var(--panel-3); text-align: center; }
+.dsp-badge { display: inline-flex; width: fit-content; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-family: var(--mono); border: 1px solid; }
+.dsp-alert { width: 100%; border: 1px solid; border-radius: 7px; padding: 8px 11px; font-size: 12px; background: var(--panel-3); }
+.dsp-banner { width: 100%; border-radius: 7px; padding: 8px 11px; font-size: 12px; }
+.dsp-emptystate { width: 100%; text-align: center; padding: 16px; font-size: 12px; color: var(--text-faint); border: 1px dashed var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.dsp-tooltip { font-size: 11px; color: var(--text-faint); font-style: italic; }
+.dsp-select { width: 100%; border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 12.5px; color: var(--text-faint); background: var(--panel-3); }
+.dsp-checkbox { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text); }
+.dsp-layout-desc { font-size: 11.5px; font-style: italic; color: var(--text-faint); border-top: 1px dashed var(--border); padding-top: 8px; margin-top: 4px; }
 .result-greyed { opacity: 0.45; }
 .gate-fail-note { font-size: 11.5px; color: var(--bad); margin-top: 6px; }
 

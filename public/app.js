@@ -40,6 +40,7 @@
     correctionLog: [],
     outerLoop: { history: [] },
     judgmentRatings: {},
+    retrying: new Set(), // profile keys currently re-running via the manual Retry button (not exported — transient UI state)
   };
 
   // ---------------------------------------------------------------------
@@ -179,6 +180,56 @@
     document.getElementById("dsSummary").innerHTML = DS.components.map((c) => `<span class="chip">${c.name}</span>`).join(" ");
   }
 
+  // Approximate visual previews per component, styled from its props_used.
+  // The JSON schema (section 3) is a flat components_used list with no
+  // parent/child relationships, so this can't render true nesting/layout —
+  // it renders each used component as a small stylized preview, stacked in
+  // the order the model listed them, with the model's own layout_description
+  // shown underneath as the actual account of how they compose.
+  function toneVar(tone) {
+    return { success: "var(--good)", warning: "var(--warn)", danger: "var(--bad)", info: "var(--accent)", neutral: "var(--text-dim)" }[tone] || "var(--accent)";
+  }
+
+  const COMPONENT_PREVIEWS = {
+    Button: (p) => {
+      const variant = p.variant || "primary";
+      return `<button type="button" class="dsp-btn dsp-btn-${Utils.escapeHtml(variant)}" disabled>${variant === "destructive" ? "Delete" : variant === "secondary" ? "Cancel" : "Continue"}</button>`;
+    },
+    Input: (p) => {
+      const state = p.state || "default";
+      return `<div class="dsp-input dsp-input-${Utils.escapeHtml(state)}"><div class="dsp-input-label">Label</div><div class="dsp-input-field">${
+        state === "error" ? "Invalid value" : "Enter value…"
+      }</div></div>`;
+    },
+    Card: (p) => `<div class="dsp-card dsp-card-${Utils.escapeHtml(p.elevation || "flat")}">Card<span class="dsp-sub">${Utils.escapeHtml(p.padding || "comfortable")} padding</span></div>`,
+    Table: () => `<div class="dsp-table">${["Row 1", "Row 2", "Row 3"].map((r) => `<div class="dsp-table-row">${r}</div>`).join("")}</div>`,
+    Modal: (p) => `<div class="dsp-modal">Modal<span class="dsp-sub">${Utils.escapeHtml(p.size || "medium")}</span></div>`,
+    Badge: (p) => {
+      const tone = p.tone || "neutral";
+      return `<span class="dsp-badge" style="color:${toneVar(tone)}; border-color:${toneVar(tone)}">${Utils.escapeHtml(tone)}</span>`;
+    },
+    Alert: (p) => {
+      const tone = p.tone || "info";
+      return `<div class="dsp-alert" style="border-color:${toneVar(tone)}; color:${toneVar(tone)}">&#9888; Alert &mdash; ${Utils.escapeHtml(tone)}</div>`;
+    },
+    Banner: (p) => {
+      const tone = p.tone || "info";
+      return `<div class="dsp-banner" style="background:${toneVar(tone)}22; color:${toneVar(tone)}">Banner &mdash; ${Utils.escapeHtml(tone)}</div>`;
+    },
+    EmptyState: (p) => `<div class="dsp-emptystate">&#128194; Nothing here yet${p.hasAction === "true" ? ` <span class="dsp-btn dsp-btn-tertiary" style="display:inline-block">Action</span>` : ""}</div>`,
+    Tooltip: (p) => `<div class="dsp-tooltip">Tooltip &mdash; ${Utils.escapeHtml(p.placement || "top")} &#9432;</div>`,
+    Select: () => `<div class="dsp-select">Select an option &#9662;</div>`,
+    Checkbox: (p) => `<label class="dsp-checkbox"><input type="checkbox" disabled ${p.state === "checked" ? "checked" : ""} /> Option</label>`,
+  };
+
+  function renderComponentPreview(name, propsUsed) {
+    const known = Evaluator.isKnownComponent(name);
+    if (!known) return `<div class="comp-block unknown">${Utils.escapeHtml(name)} (unrecognized)</div>`;
+    const props = (propsUsed || {})[name] || {};
+    const renderer = COMPONENT_PREVIEWS[name];
+    return `<div class="dsp-wrap">${renderer ? renderer(props) : `<div class="comp-block known">${Utils.escapeHtml(name)}</div>`}</div>`;
+  }
+
   function renderMockBlock(result) {
     if (!result) return '<div class="empty-state">No result.</div>';
     let html = "";
@@ -191,12 +242,10 @@
     }
     const comps = result.components_used || [];
     if (!comps.length) return html + '<div class="empty-state">Model returned no components.</div>';
-    html += comps
-      .map((c) => {
-        const known = Evaluator.isKnownComponent(c);
-        return `<div class="comp-block ${known ? "known" : "unknown"}">${Utils.escapeHtml(c)}${known ? "" : " (unrecognized)"}</div>`;
-      })
-      .join("");
+    html += comps.map((c) => renderComponentPreview(c, result.props_used)).join("");
+    if (result.layout_description) {
+      html += `<div class="dsp-layout-desc">"${Utils.escapeHtml(result.layout_description)}"</div>`;
+    }
     return html;
   }
 
@@ -233,14 +282,27 @@
 
   function renderProfileCard(profileKey, item) {
     const def = Profiles.DEFAULTS[profileKey];
+
+    if (AppState.retrying.has(profileKey)) {
+      return `
+      <div class="profile-card" data-profile="${profileKey}">
+        <div class="ptitle">${def.label}</div>
+        <div class="ppurpose">${Utils.escapeHtml(def.purpose)}</div>
+        <div class="status-line">Retrying&hellip;</div>
+      </div>`;
+    }
+
     const greyed = !item.error && (!item.gates.safety.pass || !item.gates.hallucination.pass);
+    const needsRetryOnly = item.error || !item.result; // no valid result to accept/edit/reject
+    const retryBtn = `<button class="small" data-action="retry">Retry</button>`;
     return `
     <div class="profile-card ${greyed ? "result-greyed" : ""}" data-profile="${profileKey}">
       <div class="ptitle">${def.label}</div>
       <div class="ppurpose">${Utils.escapeHtml(def.purpose)}</div>
       ${
         item.error
-          ? `<div class="status-line err">Call failed: ${Utils.escapeHtml(item.error)}</div>`
+          ? `<div class="status-line err">Call failed: ${Utils.escapeHtml(item.error)}</div>
+             <div class="action-row">${retryBtn}</div>`
           : `
         <div class="mockscreen">${renderMockBlock(item.result)}</div>
         ${greyed ? `<div class="gate-fail-note">Excluded from optimization data — a gate failed.</div>` : ""}
@@ -255,9 +317,14 @@
         ${renderScorecard(item)}
         ${renderCostLine(item)}
         <div class="action-row">
-          <button class="good small" data-action="accept">Accept</button>
-          <button class="small" data-action="edit">Edit</button>
-          <button class="bad small" data-action="reject">Reject</button>
+          ${
+            needsRetryOnly
+              ? retryBtn
+              : `<button class="good small" data-action="accept">Accept</button>
+                 <button class="small" data-action="edit">Edit</button>
+                 <button class="bad small" data-action="reject">Reject</button>`
+          }
+          ${!needsRetryOnly && greyed ? retryBtn : ""}
         </div>`
       }
     </div>`;
@@ -368,6 +435,7 @@
       else if (action === "edit") openEditor(card, item);
       else if (action === "save-edit") saveEditor(card, profileKey, item);
       else if (action === "cancel-edit") renderGenerationResults();
+      else if (action === "retry") retryProfile(profileKey);
     });
 
     document.getElementById("genBtn").addEventListener("click", onGenerateClick);
@@ -429,6 +497,26 @@
     progressEl.style.display = "none";
     statusEl.textContent = "Done.";
     btn.disabled = false;
+  }
+
+  // Re-runs a single profile against the same request that produced the current
+  // results — for transient failures (gateway timeouts, provider hiccups) or to
+  // just get a fresh sample without resubmitting the whole form.
+  async function retryProfile(profileKey) {
+    if (!AppState.lastGeneration) return;
+    const request = AppState.lastGeneration.request;
+    AppState.retrying.add(profileKey);
+    renderGenerationResults();
+    let result;
+    try {
+      result = await generateOne(profileKey, request);
+    } catch (err) {
+      result = { profileKey, request, error: err.message };
+    }
+    AppState.retrying.delete(profileKey);
+    AppState.lastGeneration.results[profileKey] = result;
+    if (!result.error) AppState.generationHistory.push({ id: Utils.uid("g"), profileKey, request, result: result.result });
+    renderGenerationResults();
   }
 
   // ---------------------------------------------------------------------
@@ -866,6 +954,7 @@
         Object.assign(AppState, data);
         AppState.settings.apiKey = keepKey;
         AppState.settings.connectionOk = false;
+        AppState.retrying = new Set(); // transient UI state — not meaningfully exportable, always reset on import
         initSettingsUI();
         updateConnDot();
         renderAll();
