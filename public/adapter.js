@@ -10,6 +10,11 @@ window.ProviderAdapter = (function () {
   // standalone Node relay's absolute URL when opened directly from file://.
   const RELAY_URL = window.location.protocol === "file:" ? "http://localhost:8787/relay" : "/relay";
 
+  // Cloudflare's own edge gives an origin up to 125s before returning a 524
+  // itself — nobody should have to wait that long to find out a model is
+  // overloaded. Fail client-side well before that, with a clear reason.
+  const REQUEST_TIMEOUT_MS = 45000;
+
   // Each entry knows how to build the request body/headers/path for that
   // provider family and how to pull text/usage back out of the response.
   const PROVIDER_KINDS = {
@@ -61,11 +66,14 @@ window.ProviderAdapter = (function () {
     if (!settings.model) throw new Error("No model set — add one in Settings.");
 
     const started = performance.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     let resp;
     try {
       resp = await fetch(RELAY_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           baseUrl: settings.baseUrl,
           path: kind.chatPath,
@@ -74,9 +82,16 @@ window.ProviderAdapter = (function () {
         }),
       });
     } catch (err) {
+      if (err.name === "AbortError") {
+        throw new Error(
+          `Timed out waiting ${REQUEST_TIMEOUT_MS / 1000}s for a response — the provider (${settings.model}) is likely overloaded or slow right now. Try again, switch providers in Settings, or use Simulation mode.`
+        );
+      }
       throw new Error(
         `Could not reach the relay at ${RELAY_URL}. Is it running? (node relay/server.js) — ${err.message}`
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     const latencyMs = Math.round(performance.now() - started);
@@ -84,7 +99,8 @@ window.ProviderAdapter = (function () {
     try {
       data = await resp.json();
     } catch (err) {
-      throw new Error(`Relay returned a non-JSON response (HTTP ${resp.status}).`);
+      const timeoutHint = resp.status === 524 ? " — the provider took too long to respond (edge proxy timeout); it's likely overloaded. Try again, switch providers, or use Simulation mode." : "";
+      throw new Error(`Relay returned a non-JSON response (HTTP ${resp.status}).${timeoutHint}`);
     }
 
     if (!resp.ok || data.error) {
