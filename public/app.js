@@ -902,6 +902,38 @@
     btn.disabled = false;
   }
 
+  // Persisted across refreshes: base URL, model, temperatures, runs-per-case.
+  // Never the API key or providerKind's connection status — the key stays
+  // memory-only per spec (section 1), so it always needs re-entering.
+  const SETTINGS_STORAGE_KEY = "design-agent-eval-loop:settings";
+
+  function loadPersistedSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.providerKind) AppState.settings.providerKind = saved.providerKind;
+      if (saved.baseUrl) AppState.settings.baseUrl = saved.baseUrl;
+      if (saved.model) AppState.settings.model = saved.model;
+      if (saved.temperatures) Object.assign(AppState.settings.temperatures, saved.temperatures);
+      if (saved.runsPerCase) AppState.settings.runsPerCase = saved.runsPerCase;
+    } catch (err) {
+      // localStorage unavailable (private browsing, disabled) — fall back to in-memory defaults silently
+    }
+  }
+
+  function persistSettings() {
+    try {
+      const s = AppState.settings;
+      localStorage.setItem(
+        SETTINGS_STORAGE_KEY,
+        JSON.stringify({ providerKind: s.providerKind, baseUrl: s.baseUrl, model: s.model, temperatures: s.temperatures, runsPerCase: s.runsPerCase })
+      );
+    } catch (err) {
+      // storage full/unavailable — settings just won't survive a refresh this time
+    }
+  }
+
   function initSettingsUI() {
     const s = AppState.settings;
     document.getElementById("cfgBaseUrl").value = s.baseUrl;
@@ -911,17 +943,35 @@
     document.getElementById("tempSprinter").value = s.temperatures.SPRINTER;
     document.getElementById("cfgRunsPerCase").value = s.runsPerCase;
 
-    document.getElementById("cfgBaseUrl").oninput = (e) => (s.baseUrl = e.target.value.trim());
-    document.getElementById("cfgModel").oninput = (e) => (s.model = e.target.value.trim());
+    document.getElementById("cfgBaseUrl").oninput = (e) => {
+      s.baseUrl = e.target.value.trim();
+      persistSettings();
+    };
+    document.getElementById("cfgModel").oninput = (e) => {
+      s.model = e.target.value.trim();
+      persistSettings();
+    };
     document.getElementById("cfgApiKey").oninput = (e) => {
       s.apiKey = e.target.value;
       s.connectionOk = false;
       updateConnDot();
     };
-    document.getElementById("tempConformist").oninput = (e) => (s.temperatures.CONFORMIST = parseFloat(e.target.value) || 0);
-    document.getElementById("tempExplorer").oninput = (e) => (s.temperatures.EXPLORER = parseFloat(e.target.value) || 0);
-    document.getElementById("tempSprinter").oninput = (e) => (s.temperatures.SPRINTER = parseFloat(e.target.value) || 0);
-    document.getElementById("cfgRunsPerCase").oninput = (e) => (s.runsPerCase = Math.max(1, parseInt(e.target.value, 10) || 3));
+    document.getElementById("tempConformist").oninput = (e) => {
+      s.temperatures.CONFORMIST = parseFloat(e.target.value) || 0;
+      persistSettings();
+    };
+    document.getElementById("tempExplorer").oninput = (e) => {
+      s.temperatures.EXPLORER = parseFloat(e.target.value) || 0;
+      persistSettings();
+    };
+    document.getElementById("tempSprinter").oninput = (e) => {
+      s.temperatures.SPRINTER = parseFloat(e.target.value) || 0;
+      persistSettings();
+    };
+    document.getElementById("cfgRunsPerCase").oninput = (e) => {
+      s.runsPerCase = Math.max(1, parseInt(e.target.value, 10) || 3);
+      persistSettings();
+    };
     document.getElementById("testConnBtn").onclick = testConnection;
   }
 
@@ -1007,6 +1057,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    loadPersistedSettings();
     initTabs();
     initSettingsUI();
     initGenerateScreenEvents();

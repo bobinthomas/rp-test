@@ -140,6 +140,7 @@
   <div class="screen" id="screen-settings">
     <div class="panel">
       <h2>Provider</h2>
+      <div class="caption top">Base URL, model, temperatures, and runs-per-case are saved to this browser and persist across refreshes. The API key is not.</div>
       <div class="field-row">
         <div>
           <label>Base URL</label>
@@ -150,7 +151,7 @@
           <input type="text" id="cfgModel" />
         </div>
       </div>
-      <label>API key <span style="color:var(--text-faint)">— held in memory only, never written to storage or exports</span></label>
+      <label>API key <span style="color:var(--text-faint)">— held in memory only, never written to storage or exports; re-enter after a refresh</span></label>
       <input type="password" id="cfgApiKey" placeholder="sk-..." />
       <button class="secondary" id="testConnBtn" style="margin-top:12px">Test connection</button>
       <div class="status-line" id="cfgStatus"></div>
