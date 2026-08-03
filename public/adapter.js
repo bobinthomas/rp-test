@@ -31,7 +31,8 @@ window.ProviderAdapter = (function () {
       },
       extractText(data) {
         const choice = data.choices && data.choices[0];
-        return choice && choice.message ? choice.message.content : "";
+        const content = choice && choice.message ? choice.message.content : "";
+        return content == null ? "" : content; // some providers return content: null (e.g. tool calls, empty completions)
       },
       extractUsage(data) {
         return data.usage || null;

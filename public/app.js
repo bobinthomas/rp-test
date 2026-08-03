@@ -797,7 +797,7 @@
       const res = await window.ProviderAdapter.testConnection(AppState.settings);
       AppState.settings.connectionOk = true;
       status.className = "status-line ok";
-      status.textContent = `Connected — ${res.latencyMs}ms round trip. Response: "${res.text.slice(0, 80)}"`;
+      status.textContent = `Connected — ${res.latencyMs}ms round trip. Response: "${(res.text || "(empty)").slice(0, 80)}"`;
     } catch (err) {
       AppState.settings.connectionOk = false;
       status.className = "status-line err";
