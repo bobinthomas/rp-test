@@ -60,9 +60,9 @@ ${SCHEMA_BLOCK}`;
 ${SCHEMA_BLOCK}`;
 
   const DEFAULTS = {
-    CONFORMIST: { label: "Conformist", purpose: "Strict house-style conformance — the safest, most conventional composition.", temperature: 0.15, maxTokens: 900 },
-    EXPLORER: { label: "Explorer", purpose: "Novel but valid compositions — trades convention for variety, still bound to the library.", temperature: 0.9, maxTokens: 900 },
-    SPRINTER: { label: "Sprinter", purpose: "Cheap and fast — minimal prompt, low token budget. Is a small call good enough?", temperature: 0.3, maxTokens: 300 },
+    CONFORMIST: { label: "Conformist", purpose: "Strict house-style conformance — the safest, most conventional composition.", temperature: 0.15, maxTokens: 1600 },
+    EXPLORER: { label: "Explorer", purpose: "Novel but valid compositions — trades convention for variety, still bound to the library.", temperature: 0.9, maxTokens: 1600 },
+    SPRINTER: { label: "Sprinter", purpose: "Cheap and fast — minimal prompt, low token budget. Is a small call good enough?", temperature: 0.3, maxTokens: 700 },
   };
 
   return {

@@ -244,8 +244,14 @@
           : `
         <div class="mockscreen">${renderMockBlock(item.result)}</div>
         ${greyed ? `<div class="gate-fail-note">Excluded from optimization data — a gate failed.</div>` : ""}
-        <div class="json-toggle" data-action="toggle-json">Raw JSON &#9662;</div>
-        <div class="rawjson">${Utils.escapeHtml(JSON.stringify(item.result, null, 2))}</div>
+        <div class="json-toggle" data-action="toggle-json">${item.result ? "Raw JSON" : "Raw response (unparsed)"} &#9662;</div>
+        <div class="rawjson">${
+          item.result
+            ? Utils.escapeHtml(JSON.stringify(item.result, null, 2))
+            : Utils.escapeHtml(
+                `Parsing failed after ${item.inner.repairAttempts} repair attempt(s): ${item.inner.parseError}\n\n--- last raw response from the model ---\n${item.inner.raw ?? "(no response captured)"}`
+              )
+        }</div>
         ${renderScorecard(item)}
         ${renderCostLine(item)}
         <div class="action-row">
@@ -348,7 +354,8 @@
       if (toggle) {
         const raw = toggle.nextElementSibling;
         raw.classList.toggle("open");
-        toggle.innerHTML = raw.classList.contains("open") ? "Raw JSON &#9652;" : "Raw JSON &#9662;";
+        const label = toggle.textContent.replace(/[▲▾]\s*$/, "").trim();
+        toggle.innerHTML = `${label} ${raw.classList.contains("open") ? "&#9652;" : "&#9662;"}`;
         return;
       }
       const btn = e.target.closest("button[data-action]");
