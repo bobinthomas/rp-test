@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design Agent — Self-Optimizing Eval Loop</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <div class="brand">
+      <span class="name">Design Agent</span>
+      <span class="tag">Eval Loop Prototype</span>
+    </div>
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-screen="generate">Generate</div>
+      <div class="tab" data-screen="optimization">Optimization</div>
+      <div class="tab" data-screen="judgment">Judgment</div>
+      <div class="tab" data-screen="review">Review Queue</div>
+      <div class="tab" data-screen="settings">Settings</div>
+    </div>
+    <div class="conn-dot" id="connDot"><span class="dot"></span><span id="connLabel">not connected</span></div>
+  </div>
+
+  <!-- ============ GENERATE ============ -->
+  <div class="screen active" id="screen-generate">
+    <div class="two-col">
+      <div>
+        <div class="panel">
+          <h2>Request</h2>
+          <label>Intent — what should the UI do?</label>
+          <textarea id="reqIntent">A settlement failure error state for the merchant dashboard, so a merchant understands what went wrong and what to do next.</textarea>
+          <label>Surface</label>
+          <select id="reqSurface">
+            <option>Merchant Dashboard</option>
+            <option>Checkout</option>
+            <option>Admin Console</option>
+          </select>
+          <label>Constraints (instruction-following checks)</label>
+          <div class="checks">
+            <label><input type="checkbox" id="reqApproved" checked /> Use only approved components</label>
+            <label><input type="checkbox" id="reqPrimary" checked /> Must include a primary action</label>
+            <label><input type="checkbox" id="reqAccessible" /> Must include an accessible description</label>
+          </div>
+          <button class="primary block" id="genBtn">Generate UI</button>
+          <div class="progress-bar" id="genProgress" style="display:none"><div style="width:0%"></div></div>
+          <div class="status-line" id="genStatus"></div>
+        </div>
+        <div class="panel">
+          <h2>Design system (ground truth)</h2>
+          <div id="dsSummary" style="font-size:12px; color:var(--text-dim); line-height:1.9;"></div>
+          <div class="caption">The evaluator below is derived from this list at runtime — it is never a separate hand-maintained list.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>Results — all three profiles run on the same request</h2>
+          <div class="caption top">CONFORMIST, EXPLORER, and SPRINTER always run together; there is no routing between them.</div>
+          <div id="genResults"><div class="empty-state">Nothing generated yet. Fill in a request and click Generate UI.</div></div>
+        </div>
+        <div class="panel">
+          <h2>Designer correction log</h2>
+          <div class="caption top">Accept / Edit / Reject on any result above is logged here. In production, logged corrections are candidates for eval-set promotion at a weekly human triage — that pipeline is not wired up in this prototype.</div>
+          <div id="corrections"><div class="empty-state">No actions logged yet.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OPTIMIZATION ============ -->
+  <div class="screen" id="screen-optimization">
+    <div class="panel">
+      <h2>Live CONFORMIST system prompt</h2>
+      <div class="caption top">The outer loop improves the CONFORMIST profile's system prompt only, to keep scope tight. EXPLORER and SPRINTER prompts are fixed.</div>
+      <div class="rawjson open" id="livePromptView" style="max-height:220px;"></div>
+      <button class="primary block" id="runIterationBtn">Run iteration</button>
+      <div class="progress-bar" id="iterProgress" style="display:none"><div style="width:0%"></div></div>
+      <div class="status-line" id="iterStatus"></div>
+    </div>
+
+    <div class="panel" id="makerPanel" style="display:none">
+      <h2>1 · Maker proposal</h2>
+      <div class="caption top">The Maker sees the live prompt, this session's training scores, and the 3 lowest-scoring cases only — never gate internals, held-out cases, or eval scoring code.</div>
+      <div id="makerContent"></div>
+    </div>
+
+    <div class="panel" id="checkerPanel" style="display:none">
+      <h2>2 · Checker — candidate vs. live, same session</h2>
+      <div class="caption top">Comparing the candidate's fresh runs against a stale recorded baseline is not a valid comparison; the baseline is measured under the same settings, in this same run.</div>
+      <div id="checkerContent"></div>
+    </div>
+
+    <div class="panel" id="decisionPanel" style="display:none">
+      <h2>3 · Decision — gates plus target</h2>
+      <div id="decisionContent"></div>
+    </div>
+
+    <div class="panel" id="heldOutPanel" style="display:none">
+      <h2>4 · Held-out commit run</h2>
+      <div class="caption top">A training gain without a held-out gain is overfitting, measured.</div>
+      <div id="heldOutContent"></div>
+    </div>
+
+    <div class="panel" id="promotionPanel" style="display:none">
+      <h2>5 · Promotion gate</h2>
+      <div class="caption top">The loop has autonomy over exploration and zero autonomy over promotion. Only a human Approve makes a candidate live.</div>
+      <div id="promotionContent"></div>
+    </div>
+
+    <div class="panel">
+      <h2>6 · History — append-only</h2>
+      <div id="historyList"><div class="empty-state">No iterations run yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ JUDGMENT ============ -->
+  <div class="screen" id="screen-judgment">
+    <div class="panel">
+      <h2>Judgment rules</h2>
+      <div class="caption top">Rules are authored by senior designers in plain language; the system compiles them to executable assertions; the designer reviews the translation. The Maker never authors rules.</div>
+      <table>
+        <thead><tr><th>Plain-language rule</th><th>Compiled assertion</th><th>Status</th></tr></thead>
+        <tbody id="judgmentTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ REVIEW QUEUE (stub) ============ -->
+  <div class="screen" id="screen-review">
+    <div class="panel">
+      <h2>Review queue <span class="stub-badge">Stub</span></h2>
+      <div class="caption top">Weekly human sampling recalibrates automated metrics against human judgment; ratings feed the held-out set in production. This panel logs ratings — it does not drive anything in this prototype.</div>
+      <div id="reviewQueue"></div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div class="screen" id="screen-settings">
+    <div class="panel">
+      <h2>Provider</h2>
+      <div class="field-row">
+        <div>
+          <label>Base URL</label>
+          <input type="text" id="cfgBaseUrl" />
+        </div>
+        <div>
+          <label>Model</label>
+          <input type="text" id="cfgModel" />
+        </div>
+      </div>
+      <label>API key <span style="color:var(--text-faint)">— held in memory only, never written to storage or exports</span></label>
+      <input type="password" id="cfgApiKey" placeholder="sk-..." />
+      <button class="secondary" id="testConnBtn" style="margin-top:12px">Test connection</button>
+      <div class="status-line" id="cfgStatus"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Profile temperatures</h2>
+      <div class="field-row" style="grid-template-columns: repeat(3, 1fr);">
+        <div>
+          <label>Conformist</label>
+          <input type="number" id="tempConformist" step="0.05" min="0" max="2" />
+        </div>
+        <div>
+          <label>Explorer</label>
+          <input type="number" id="tempExplorer" step="0.05" min="0" max="2" />
+        </div>
+        <div>
+          <label>Sprinter</label>
+          <input type="number" id="tempSprinter" step="0.05" min="0" max="2" />
+        </div>
+      </div>
+      <label>Runs per case (eval / checker batches)</label>
+      <input type="number" id="cfgRunsPerCase" min="1" max="5" />
+      <div class="caption">Applies to Checker training runs and held-out commit runs. Higher = slower but less noisy.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Session</h2>
+      <div style="display:flex; gap:10px;">
+        <button class="secondary" id="exportBtn">Export session (.json)</button>
+        <button class="secondary" id="importBtn">Import session (.json)</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none" />
+      </div>
+      <div class="caption">Exports all in-memory state (prompts, history, correction log, eval config). The API key is never included.</div>
+      <div class="status-line" id="sessionStatus"></div>
+    </div>
+  </div>
+
+  <footer class="smallprint">
+    Prototype for a 60+ person design team. Inner-loop repairs are per-request and never persist. Accuracy is the only scalar the outer loop optimizes; gates are constraints, not objectives. Small print throughout marks every place this prototype simplifies production reality.
+  </footer>
+</div>
+
+<script src="design-system.js"></script>
+<script src="utils.js"></script>
+<script src="evaluator.js"></script>
+<script src="adapter.js"></script>
+<script src="profiles.js"></script>
+<script src="eval-cases.js"></script>
+<script src="inner-loop.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

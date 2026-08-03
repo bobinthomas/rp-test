@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Agent — Eval Loop Prototype</title>
+<style>
+  :root{
+    --bg:#0F1115;
+    --panel:#171A21;
+    --panel-2:#1E222B;
+    --border:#2A2F3A;
+    --text:#E7E9EE;
+    --text-dim:#9AA3B2;
+    --accent:#5B8CFF;
+    --accent-soft:rgba(91,140,255,0.12);
+    --good:#4ADE80;
+    --warn:#FBBF24;
+    --bad:#F87171;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+    padding:32px; line-height:1.5;
+  }
+  .wrap{max-width:1180px; margin:0 auto;}
+  header{margin-bottom:28px;}
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:8px;
+  }
+  h1{font-size:26px; margin:0 0 6px 0; font-weight:650; letter-spacing:-0.01em;}
+  .sub{color:var(--text-dim); font-size:14px; max-width:640px;}
+  .grid{display:grid; grid-template-columns: 380px 1fr; gap:20px; align-items:start;}
+  @media (max-width: 900px){ .grid{grid-template-columns: 1fr;} }
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px;
+  }
+  .panel + .panel{margin-top:20px;}
+  h2{font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin:0 0 14px 0; font-weight:600;}
+  label{display:block; font-size:13px; color:var(--text-dim); margin:14px 0 6px 0;}
+  label:first-of-type{margin-top:0;}
+  textarea, select{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    border-radius:8px; padding:10px 12px; font-family:var(--sans); font-size:14px; resize:vertical;
+  }
+  textarea{min-height:70px;}
+  .checks{display:flex; flex-direction:column; gap:8px; margin-top:6px;}
+  .checks label{display:flex; align-items:center; gap:8px; margin:0; font-size:13px; color:var(--text); cursor:pointer;}
+  .toggle-row{display:flex; gap:8px; margin-top:6px;}
+  .toggle-btn{
+    flex:1; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2);
+    color:var(--text-dim); font-size:13px; cursor:pointer; text-align:center;
+  }
+  .toggle-btn.active{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;}
+  button.primary{
+    width:100%; margin-top:18px; padding:11px; border-radius:8px; border:none;
+    background:var(--accent); color:#0B0D12; font-weight:650; font-size:14px; cursor:pointer;
+  }
+  button.primary:disabled{opacity:0.5; cursor:default;}
+  button.secondary{
+    padding:9px 14px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2);
+    color:var(--text); font-size:13px; cursor:pointer;
+  }
+  .status{font-family:var(--mono); font-size:12px; color:var(--text-dim); margin-top:10px; min-height:16px;}
+  .mockscreen{
+    background:var(--panel-2); border:1px dashed var(--border); border-radius:10px; padding:18px;
+    min-height:140px; display:flex; flex-direction:column; gap:8px;
+  }
+  .comp-block{
+    padding:8px 12px; border-radius:6px; font-size:12px; font-family:var(--mono);
+    border:1px solid var(--border); background:var(--bg); display:inline-flex; align-items:center; gap:6px; width:fit-content;
+  }
+  .comp-block.known::before{content:"●"; color:var(--good); font-size:9px;}
+  .comp-block.unknown::before{content:"●"; color:var(--bad); font-size:9px;}
+  .placeholder{color:var(--text-dim); font-size:13px; font-style:italic;}
+  .score-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:6px;}
+  .score-card{background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;}
+  .score-card .num{font-size:22px; font-weight:700; font-family:var(--mono);}
+  .score-card .label{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; margin-top:4px;}
+  .good{color:var(--good);} .warn{color:var(--warn);} .bad{color:var(--bad);}
+  .rawjson{
+    background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px;
+    font-family:var(--mono); font-size:11.5px; color:var(--text-dim); white-space:pre-wrap; max-height:220px; overflow:auto; margin-top:12px;
+  }
+  table{width:100%; border-collapse:collapse; margin-top:10px; font-size:13px;}
+  th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--border);}
+  th{color:var(--text-dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.04em;}
+  .pill{display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-family:var(--mono);}
+  .pill.good{background:rgba(74,222,128,0.12); color:var(--good);}
+  .pill.warn{background:rgba(251,191,36,0.12); color:var(--warn);}
+  .pill.bad{background:rgba(248,113,113,0.12); color:var(--bad);}
+  .corrections{margin-top:10px; display:flex; flex-direction:column; gap:6px; max-height:140px; overflow:auto;}
+  .correction-item{font-size:12px; font-family:var(--mono); color:var(--text-dim); border-left:2px solid var(--accent); padding-left:8px;}
+  footer{margin-top:28px; font-size:12px; color:var(--text-dim); text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Prototype · Intent → Grounded Generation → Eval Loop</div>
+    <h1>Design Agent Eval Loop</h1>
+    <div class="sub">A thin vertical slice: structured intent capture, design-system-grounded generation, and an automated eval scorecard scoring accuracy, hallucination, instruction-following, and safety — run continuously, and diffed against a baseline prompt.</div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: INPUT -->
+    <div>
+      <div class="panel">
+        <h2>1 · Structured intent</h2>
+        <label>What should the UI do? (intent)</label>
+        <textarea id="intent">A settlement failure error state for the merchant dashboard, so a merchant understands what went wrong and what to do next.</textarea>
+        <label>Surface</label>
+        <select id="surface">
+          <option>Merchant Dashboard</option>
+          <option>Checkout</option>
+          <option>Admin Console</option>
+        </select>
+        <label>Constraints (instruction-following checks)</label>
+        <div class="checks">
+          <label><input type="checkbox" id="c1" checked> Use only approved components from the library</label>
+          <label><input type="checkbox" id="c2" checked> Must include a primary action</label>
+          <label><input type="checkbox" id="c3"> Must include an accessible error description</label>
+        </div>
+        <label>Prompt version under test</label>
+        <div class="toggle-row">
+          <div class="toggle-btn active" id="btn-v1" onclick="setVersion('v1')">Prompt v1 (baseline)</div>
+          <div class="toggle-btn" id="btn-v2" onclick="setVersion('v2')">Prompt v2 (candidate)</div>
+        </div>
+        <button class="primary" id="genBtn" onclick="generate()">Generate UI</button>
+        <div class="status" id="status"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Design system (ground truth)</h2>
+        <div style="font-size:12px; color:var(--text-dim); font-family:var(--mono); line-height:1.9;">
+          Button · Input · Card · Table · Modal · Badge · Avatar · EmptyState · Tooltip · Alert · Banner
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: OUTPUT + EVAL -->
+    <div>
+      <div class="panel">
+        <h2>2 · Generated output</h2>
+        <div class="mockscreen" id="mockscreen">
+          <div class="placeholder">Nothing generated yet — click Generate UI.</div>
+        </div>
+        <div class="rawjson" id="rawjson" style="display:none;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>3 · Auto-eval scorecard</h2>
+        <div class="score-grid">
+          <div class="score-card"><div class="num" id="s-acc">–</div><div class="label">Accuracy</div></div>
+          <div class="score-card"><div class="num" id="s-hal">–</div><div class="label">Hallucination</div></div>
+          <div class="score-card"><div class="num" id="s-ins">–</div><div class="label">Instruction-following</div></div>
+          <div class="score-card"><div class="num" id="s-safe">–</div><div class="label">Safety</div></div>
+        </div>
+        <div id="evalNotes" style="margin-top:12px; font-size:12.5px; color:var(--text-dim);"></div>
+      </div>
+
+      <div class="panel">
+        <h2>4 · Fixed eval set — v1 vs v2 diff</h2>
+        <div class="sub" style="margin-bottom:4px;">Runs the same 4 canned requests through both prompt versions and compares aggregate scores. This is what makes "is the new prompt actually better" a measured answer instead of a guess.</div>
+        <button class="secondary" onclick="runEvalSuite()" id="suiteBtn">Run eval suite (v1 vs v2)</button>
+        <table id="suiteTable" style="display:none;">
+          <thead><tr><th>Metric</th><th>v1 (baseline)</th><th>v2 (candidate)</th><th>Δ</th></tr></thead>
+          <tbody id="suiteBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>5 · Designer correction log</h2>
+        <div class="sub" style="margin-bottom:4px;">Every edit a designer makes to a generated output is free labeled signal — logged here and fed back into the eval set over time.</div>
+        <button class="secondary" onclick="simulateCorrection()">Simulate a designer correction</button>
+        <div class="corrections" id="corrections"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Prototype — automated evals are heuristic/rule-based against the mock design system below; generation calls the model live.</footer>
+</div>
+
+<script>
+const KNOWN_COMPONENTS = ["Button","Input","Card","Table","Modal","Badge","Avatar","EmptyState","Tooltip","Alert","Banner"];
+const UNSAFE_FIELDS = ["ssn","password","cardnumber","cvv","aadhaar","accountnumber"];
+
+let currentVersion = 'v1';
+let lastResult = null;
+
+const PROMPTS = {
+  v1: `You are a UI generation assistant for an internal design tool. Given a designer's request, respond with ONLY a JSON object (no markdown fences, no prose) with this shape:
+{"components_used": ["..."], "tokens_used": ["..."], "layout_description": "...", "field_names": ["..."]}
+Pick components freely to best match the request.`,
+  v2: `You are a UI generation assistant for an internal design tool used by a design system team. You MUST only choose components from this approved library: ${KNOWN_COMPONENTS.join(", ")}. Never invent a component name outside this list. Given a designer's request and stated constraints, respond with ONLY a JSON object (no markdown fences, no prose) with this shape:
+{"components_used": ["..."], "tokens_used": ["..."], "layout_description": "...", "field_names": ["..."]}
+Respect every stated constraint exactly. Do not include any raw sensitive field names (like card numbers or passwords) in field_names — use masked or referential names instead.`
+};
+
+function setVersion(v){
+  currentVersion = v;
+  document.getElementById('btn-v1').classList.toggle('active', v==='v1');
+  document.getElementById('btn-v2').classList.toggle('active', v==='v2');
+}
+
+function buildUserMessage(intent, surface, constraints){
+  let c = constraints.length ? `Constraints: ${constraints.join('; ')}.` : '';
+  return `Surface: ${surface}. Request: ${intent} ${c}`;
+}
+
+async function callModel(systemPrompt, userMessage){
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }]
+    })
+  });
+  const data = await response.json();
+  const textBlock = (data.content || []).find(b => b.type === "text");
+  let raw = textBlock ? textBlock.text : "{}";
+  raw = raw.replace(/```json|```/g, "").trim();
+  try { return JSON.parse(raw); }
+  catch(e){ return {components_used:[], tokens_used:[], layout_description: raw, field_names:[]}; }
+}
+
+function evaluate(result, constraintsChecked){
+  const comps = result.components_used || [];
+  const fields = (result.field_names || []).map(f => f.toLowerCase());
+
+  // Accuracy: % of used components that are real
+  const known = comps.filter(c => KNOWN_COMPONENTS.includes(c));
+  const accuracy = comps.length ? Math.round((known.length / comps.length) * 100) : 0;
+
+  // Hallucination: count of invented components (fewer = better, scored inverse)
+  const unknown = comps.filter(c => !KNOWN_COMPONENTS.includes(c));
+  const hallucination = comps.length ? Math.round((1 - unknown.length / comps.length) * 100) : 100;
+
+  // Instruction-following: check constraints that were actually selected
+  let passed = 0, total = 0;
+  if(constraintsChecked.includes('approved')){ total++; if(unknown.length===0) passed++; }
+  if(constraintsChecked.includes('primary')){ total++; if(comps.includes('Button')) passed++; }
+  if(constraintsChecked.includes('accessible')){ total++; if((result.layout_description||'').toLowerCase().includes('label') || (result.layout_description||'').toLowerCase().includes('description')) passed++; }
+  const instruction = total ? Math.round((passed/total)*100) : 100;
+
+  // Safety: no unsafe raw field names
+  const unsafe = fields.filter(f => UNSAFE_FIELDS.some(u => f.includes(u)));
+  const safety = unsafe.length === 0 ? 100 : Math.max(0, 100 - unsafe.length*35);
+
+  return {accuracy, hallucination, instruction, safety, unknown, unsafe};
+}
+
+function scoreClass(n){ return n>=80?'good':(n>=50?'warn':'bad'); }
+
+function renderMock(result){
+  const el = document.getElementById('mockscreen');
+  const comps = result.components_used || [];
+  if(!comps.length){ el.innerHTML = '<div class="placeholder">Model returned no components.</div>'; return; }
+  el.innerHTML = comps.map(c => {
+    const isKnown = KNOWN_COMPONENTS.includes(c);
+    return `<div class="comp-block ${isKnown?'known':'unknown'}">${c}${isKnown?'':' (unrecognized)'}</div>`;
+  }).join('');
+}
+
+async function generate(){
+  const btn = document.getElementById('genBtn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.textContent = 'Calling model with ' + currentVersion + ' system prompt...';
+
+  const intent = document.getElementById('intent').value;
+  const surface = document.getElementById('surface').value;
+  const constraints = [];
+  if(document.getElementById('c1').checked) constraints.push('approved');
+  if(document.getElementById('c2').checked) constraints.push('primary');
+  if(document.getElementById('c3').checked) constraints.push('accessible');
+  const constraintLabels = [];
+  if(constraints.includes('approved')) constraintLabels.push('use only approved components');
+  if(constraints.includes('primary')) constraintLabels.push('include a primary action button');
+  if(constraints.includes('accessible')) constraintLabels.push('include an accessible error description');
+
+  try{
+    const userMsg = buildUserMessage(intent, surface, constraintLabels);
+    const result = await callModel(PROMPTS[currentVersion], userMsg);
+    lastResult = result;
+    renderMock(result);
+    document.getElementById('rawjson').style.display = 'block';
+    document.getElementById('rawjson').textContent = JSON.stringify(result, null, 2);
+
+    const scores = evaluate(result, constraints);
+    document.getElementById('s-acc').textContent = scores.accuracy + '%';
+    document.getElementById('s-acc').className = 'num ' + scoreClass(scores.accuracy);
+    document.getElementById('s-hal').textContent = scores.hallucination + '%';
+    document.getElementById('s-hal').className = 'num ' + scoreClass(scores.hallucination);
+    document.getElementById('s-ins').textContent = scores.instruction + '%';
+    document.getElementById('s-ins').className = 'num ' + scoreClass(scores.instruction);
+    document.getElementById('s-safe').textContent = scores.safety + '%';
+    document.getElementById('s-safe').className = 'num ' + scoreClass(scores.safety);
+
+    let notes = [];
+    if(scores.unknown.length) notes.push(`Unrecognized components: ${scores.unknown.join(', ')}`);
+    if(scores.unsafe.length) notes.push(`Unsafe field names detected: ${scores.unsafe.join(', ')}`);
+    document.getElementById('evalNotes').textContent = notes.length ? notes.join(' · ') : 'No issues flagged.';
+
+    status.textContent = 'Done — ' + currentVersion + ' response evaluated.';
+  }catch(err){
+    status.textContent = 'Error calling model: ' + err.message;
+  }
+  btn.disabled = false;
+}
+
+const EVAL_SET = [
+  {intent: "Empty state for a merchant with no transactions yet.", surface:"Merchant Dashboard", constraints:['approved','primary']},
+  {intent: "Bulk refund confirmation modal.", surface:"Admin Console", constraints:['approved','primary','accessible']},
+  {intent: "Inline validation error on a payout amount field.", surface:"Checkout", constraints:['approved','accessible']},
+  {intent: "Settlement delay warning banner.", surface:"Merchant Dashboard", constraints:['approved']}
+];
+
+async function runSuiteForVersion(version){
+  let totals = {accuracy:0, hallucination:0, instruction:0, safety:0};
+  for(const item of EVAL_SET){
+    const constraintLabels = [];
+    if(item.constraints.includes('approved')) constraintLabels.push('use only approved components');
+    if(item.constraints.includes('primary')) constraintLabels.push('include a primary action button');
+    if(item.constraints.includes('accessible')) constraintLabels.push('include an accessible error description');
+    const userMsg = buildUserMessage(item.intent, item.surface, constraintLabels);
+    const result = await callModel(PROMPTS[version], userMsg);
+    const scores = evaluate(result, item.constraints);
+    totals.accuracy += scores.accuracy;
+    totals.hallucination += scores.hallucination;
+    totals.instruction += scores.instruction;
+    totals.safety += scores.safety;
+  }
+  const n = EVAL_SET.length;
+  return {
+    accuracy: Math.round(totals.accuracy/n),
+    hallucination: Math.round(totals.hallucination/n),
+    instruction: Math.round(totals.instruction/n),
+    safety: Math.round(totals.safety/n)
+  };
+}
+
+async function runEvalSuite(){
+  const btn = document.getElementById('suiteBtn');
+  btn.disabled = true; btn.textContent = 'Running 4 requests × 2 prompt versions...';
+  try{
+    const [v1, v2] = await Promise.all([runSuiteForVersion('v1'), runSuiteForVersion('v2')]);
+    const rows = [
+      ['Accuracy', v1.accuracy, v2.accuracy],
+      ['Hallucination resistance', v1.hallucination, v2.hallucination],
+      ['Instruction-following', v1.instruction, v2.instruction],
+      ['Safety', v1.safety, v2.safety]
+    ];
+    const tbody = document.getElementById('suiteBody');
+    tbody.innerHTML = rows.map(([label, a, b]) => {
+      const diff = b - a;
+      const diffClass = diff > 0 ? 'good' : (diff < 0 ? 'bad' : 'warn');
+      const diffLabel = diff > 0 ? `+${diff}` : `${diff}`;
+      return `<tr><td>${label}</td><td>${a}%</td><td>${b}%</td><td><span class="pill ${diffClass}">${diffLabel}</span></td></tr>`;
+    }).join('');
+    document.getElementById('suiteTable').style.display = 'table';
+  }catch(err){
+    alert('Eval suite error: ' + err.message);
+  }
+  btn.disabled = false; btn.textContent = 'Run eval suite (v1 vs v2)';
+}
+
+let correctionCount = 0;
+const SAMPLE_CORRECTIONS = [
+  "Replaced Modal with Banner — modal was too heavy for a non-blocking warning.",
+  "Removed invented 'StatusChip' component, used Badge instead.",
+  "Added missing accessible label to error Alert.",
+  "Swapped generic Button copy 'Submit' for 'Retry payment'."
+];
+function simulateCorrection(){
+  const el = document.getElementById('corrections');
+  const text = SAMPLE_CORRECTIONS[correctionCount % SAMPLE_CORRECTIONS.length];
+  correctionCount++;
+  const div = document.createElement('div');
+  div.className = 'correction-item';
+  div.textContent = `[logged] ${text}`;
+  el.prepend(div);
+}
+</script>
+</body>
+</html>
