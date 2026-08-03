@@ -9,6 +9,7 @@ const ALLOWED_HOSTS = new Set([
   "api.moonshot.cn", // Moonshot — China
   "api.groq.com", // Groq
   "api.openai.com", // OpenAI
+  "api.tokenrouter.com", // TokenRouter
 ]);
 
 function corsHeaders() {
