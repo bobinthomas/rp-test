@@ -20,8 +20,12 @@
       <div class="tab" data-screen="review">Review Queue</div>
       <div class="tab" data-screen="settings">Settings</div>
     </div>
-    <div class="conn-dot" id="connDot"><span class="dot"></span><span id="connLabel">not connected</span></div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div class="sim-toggle" id="simToggle" title="Simulate model responses locally — no API key or network call needed"><span class="dot"></span><span id="simLabel">Simulation off</span></div>
+      <div class="conn-dot" id="connDot"><span class="dot"></span><span id="connLabel">not connected</span></div>
+    </div>
   </div>
+  <div class="sim-banner" id="simBanner" style="display:none">Simulation mode is on — results are synthetic, generated locally with no API call. Toggle it off in the top bar to use your configured provider for real.</div>
 
   <!-- ============ GENERATE ============ -->
   <div class="screen active" id="screen-generate">
@@ -196,6 +200,7 @@
 </div>
 
 <script src="design-system.js"></script>
+<script src="simulated-provider.js"></script>
 <script src="utils.js"></script>
 <script src="evaluator.js"></script>
 <script src="adapter.js"></script>

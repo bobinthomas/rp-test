@@ -50,8 +50,10 @@ window.ProviderAdapter = (function () {
     return message;
   }
 
-  // settings: { baseUrl, model, apiKey, providerKind } (providerKind defaults to openai-compatible)
+  // settings: { baseUrl, model, apiKey, providerKind, simulate } (providerKind defaults to openai-compatible)
   async function call(settings, { system, user, temperature, maxTokens }) {
+    if (settings.simulate) return window.SimulatedProvider.respond(system, user);
+
     const kind = PROVIDER_KINDS[settings.providerKind || "openai-compatible"];
     if (!kind) throw new Error(`Unknown provider kind "${settings.providerKind}"`);
     if (!settings.apiKey) throw new Error("No API key set — add one in Settings.");

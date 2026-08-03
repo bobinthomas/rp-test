@@ -19,6 +19,7 @@
       temperatures: { CONFORMIST: 0.15, EXPLORER: 0.9, SPRINTER: 0.3 },
       runsPerCase: 3,
       connectionOk: false,
+      simulate: false, // session-only, never persisted — always starts off on a fresh load
     },
     prompts: {
       versions: [
@@ -82,6 +83,7 @@
   // inner loop, then scores the final attempt against the evaluator. Throws only
   // on transport/auth failure — parse/shape failures are captured in the result.
   async function generateOne(profileKey, request, systemPromptOverride) {
+    const simulated = !!AppState.settings.simulate; // captured at call time, so a card always reflects how it was actually produced
     const cfg = getProfileRuntimeConfig(profileKey);
     const systemPrompt = getSystemPromptFor(profileKey, systemPromptOverride);
     const userMessage = buildUserMessage(request.intent, request.surface, request.constraints);
@@ -94,6 +96,7 @@
         request,
         inner,
         result: null,
+        simulated,
         gates: {
           safety: { pass: false, reason: "response could not be parsed: " + inner.parseError },
           hallucination: { pass: false, reason: "response could not be parsed" },
@@ -107,7 +110,7 @@
     const hallucination = Evaluator.hallucinationGate(inner.violations);
     const accuracy = Evaluator.accuracy(inner.result, expectedBehavior, inner.violations);
     const instruction = Evaluator.instructionFollowing(inner.result, request.constraints, request.intent);
-    return { profileKey, request, inner, result: inner.result, gates: { safety, hallucination }, accuracy, instruction };
+    return { profileKey, request, inner, result: inner.result, simulated, gates: { safety, hallucination }, accuracy, instruction };
   }
 
   // Runs every case in `cases` `runsPerCase` times through CONFORMIST with the
@@ -297,7 +300,7 @@
     const retryBtn = `<button class="small" data-action="retry">Retry</button>`;
     return `
     <div class="profile-card ${greyed ? "result-greyed" : ""}" data-profile="${profileKey}">
-      <div class="ptitle">${def.label}</div>
+      <div class="ptitle">${def.label}${item.simulated ? '<span class="sim-chip">Simulated</span>' : ""}</div>
       <div class="ppurpose">${Utils.escapeHtml(def.purpose)}</div>
       ${
         item.error
@@ -444,9 +447,9 @@
   async function onGenerateClick() {
     const s = AppState.settings;
     const statusEl = document.getElementById("genStatus");
-    if (!s.apiKey) {
+    if (!s.apiKey && !s.simulate) {
       statusEl.className = "status-line err";
-      statusEl.textContent = "Set an API key in Settings first.";
+      statusEl.textContent = "Set an API key in Settings first (or turn on Simulation in the top bar).";
       return;
     }
     const intent = document.getElementById("reqIntent").value.trim();
@@ -716,10 +719,10 @@
   }
 
   async function runIteration() {
-    if (!AppState.settings.apiKey) {
+    if (!AppState.settings.apiKey && !AppState.settings.simulate) {
       const statusEl = document.getElementById("iterStatus");
       statusEl.className = "status-line err";
-      statusEl.textContent = "Set an API key in Settings first.";
+      statusEl.textContent = "Set an API key in Settings first (or turn on Simulation in the top bar).";
       return;
     }
     const btn = document.getElementById("runIterationBtn");
@@ -880,6 +883,20 @@
     const label = document.getElementById("connLabel");
     dot.className = "conn-dot " + (AppState.settings.connectionOk ? "ok" : AppState.settings.apiKey ? "bad" : "");
     label.textContent = AppState.settings.connectionOk ? AppState.settings.model : AppState.settings.apiKey ? "not verified" : "not connected";
+  }
+
+  function updateSimToggle() {
+    const on = AppState.settings.simulate;
+    document.getElementById("simToggle").className = "sim-toggle" + (on ? " on" : "");
+    document.getElementById("simLabel").textContent = on ? "Simulation on" : "Simulation off";
+    document.getElementById("simBanner").style.display = on ? "block" : "none";
+  }
+
+  function initSimToggle() {
+    document.getElementById("simToggle").addEventListener("click", () => {
+      AppState.settings.simulate = !AppState.settings.simulate;
+      updateSimToggle();
+    });
   }
 
   async function testConnection() {
@@ -1062,7 +1079,9 @@
     initSettingsUI();
     initGenerateScreenEvents();
     initSessionUI();
+    initSimToggle();
     updateConnDot();
+    updateSimToggle();
     renderAll();
     document.getElementById("runIterationBtn").addEventListener("click", runIteration);
   });
